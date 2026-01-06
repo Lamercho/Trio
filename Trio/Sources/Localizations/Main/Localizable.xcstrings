@@ -212983,6 +212983,9 @@
         }
       }
     },
+    "SMBs Off%@" : {
+
+    },
     "Smooth CGM readings using Savitzky-Golay filtering." : {
       "localizations" : {
         "bg" : {
