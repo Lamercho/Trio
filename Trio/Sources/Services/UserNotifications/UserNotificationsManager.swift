@@ -55,6 +55,7 @@ final class BaseUserNotificationsManager: NSObject, UserNotificationsManager, In
 
         Task { await updateGlucoseBadge() }
         configureNotificationCategories()
+        requestCriticalAlertsIfNeeded()
         clearLegacyCarbsRequiredNotification()
         clearLegacyLoopNotifications()
         subscribeGlucoseUpdates()
@@ -178,6 +179,21 @@ final class BaseUserNotificationsManager: NSObject, UserNotificationsManager, In
         }
     }
 
+    /// Onboarding is the only place that asks for notification permissions, so
+    /// installs made before critical alerts were added never see the prompt.
+    /// Re-ask on launch until the user answers it. iOS stops showing the prompt
+    /// once answered, so this doesn't nag.
+    private func requestCriticalAlertsIfNeeded() {
+        notificationCenter.getNotificationSettings { [weak self] settings in
+            guard settings.authorizationStatus == .authorized, settings.criticalAlertSetting != .enabled else { return }
+            // UNUserNotificationCenter methods should be called on main thread
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.requestNotificationPermissions { _ in }
+            }
+        }
+    }
+
     func getNotificationSettings(completionHandler: @escaping (UNNotificationSettings) -> Void) {
         notificationCenter.getNotificationSettings { settings in
             DispatchQueue.main.async {
@@ -188,7 +204,7 @@ final class BaseUserNotificationsManager: NSObject, UserNotificationsManager, In
 
     func requestNotificationPermissions(completion: @escaping (Bool) -> Void) {
         debug(.alerts, "Requesting notification permission")
-        notificationCenter.requestAuthorization(options: [.badge, .sound, .alert]) { granted, error in
+        notificationCenter.requestAuthorization(options: [.badge, .sound, .alert, .criticalAlert]) { granted, error in
             if granted {
                 info(.alerts, "Notification permission granted")
                 DispatchQueue.main.async {
